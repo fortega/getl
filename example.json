@@ -1,0 +1,14 @@
+{
+  "inputs": [
+    {
+      "name": "test",
+      "format": "csv",
+      "options": {
+        "header": "true",
+        "delimiter": ";",
+        "path": "src/main/resources/test.csv"
+      }
+    }
+  ],
+  "sql": "SELECT * FROM test"
+}
