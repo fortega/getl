@@ -15,37 +15,42 @@ import com.github.fortega.service.ConfigValidationService
 import com.github.fortega.adapter.SparkFromEnvAdapter
 import com.github.fortega.service.ExtractToViewService
 import scala.collection.immutable
+import com.github.fortega.service.TransformSqlService
+import com.github.fortega.service.LoadDataframeService
 
 object App {
   lazy val logger = LoggerFactory.getLogger("App")
 
-  def saveDataFrame(
-      output: OutputDefinition,
-      data: DataFrame
-  ): Unit = data.write
-    .mode(output.mode)
-    .format(output.format)
-    .options(output.options)
-    .save
-
-  def handleError(
+  private def handleError(
       name: String,
-      error: Throwable,
-      exit: Boolean = true
+      error: Throwable
+  ): Unit = handleError(name, List(error))
+
+  private def handleError(
+      name: String,
+      errors: List[Throwable]
   ): Unit = {
-    logger.error(s"ERROR @ $name: ${error.getMessage}")
-    if (exit) sys.exit(1)
+    errors.foreach { error => logger.error(s"ERROR @ $name", error) }
+    sys.exit(1)
+  }
+
+  private def handleSuccess: Unit = {
+    logger.info("SUCCESS")
+    sys.exit(0)
   }
 
   def runEtl(config: Config, spark: SparkSession): Unit = {
     ExtractToViewService(spark)(config.inputs) match {
-      case error :: tail => handleError("extract", error)
-      case Nil =>
-        val result = spark.sql(config.sql)
-
-        config.output match {
-          case None         => result.show(false)
-          case Some(output) => saveDataFrame(output, result)
+      case errors: List[Throwable] if errors.nonEmpty =>
+        handleError("extract", errors)
+      case _ =>
+        TransformSqlService(spark)(config.sql) match {
+          case Failure(error) => handleError("transform", error)
+          case Success(transformed) =>
+            LoadDataframeService(transformed, config.output) match {
+              case Some(error) => handleError("load", error)
+              case None        => handleSuccess
+            }
         }
     }
   }
