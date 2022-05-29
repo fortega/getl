@@ -9,18 +9,6 @@ import java.util.Base64
 import scala.util.Failure
 
 object JsonConfigAdapter {
-  def apply(cmdArgs: Array[String]): ConfigPort = apply(
-    String.valueOf(cmdArgs.flatten)
-  )
-
-  def apply(
-      env: Map[String, String],
-      key: String = "CONFIG"
-  ): ConfigPort = env.get(key) match {
-    case None         => Failure(new Exception(s"env $key not found"))
-    case Some(base64) => apply(base64)
-  }
-
   def apply(
       base64: String
   ): ConfigPort = Try {

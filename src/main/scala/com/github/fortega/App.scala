@@ -17,6 +17,7 @@ import com.github.fortega.service.ExtractToViewService
 import scala.collection.immutable
 import com.github.fortega.service.TransformSqlService
 import com.github.fortega.service.LoadDataframeService
+import com.github.fortega.adapter.LoaderConfigAdapter
 
 object App {
   lazy val logger = LoggerFactory.getLogger("App")
@@ -34,10 +35,7 @@ object App {
     sys.exit(1)
   }
 
-  private def handleSuccess: Unit = {
-    logger.info("SUCCESS")
-    sys.exit(0)
-  }
+  private def handleSuccess: Unit = logger.info("SUCCESS")
 
   def runEtl(config: Config, spark: SparkSession): Unit = {
     ExtractToViewService(spark)(config.inputs) match {
@@ -56,18 +54,24 @@ object App {
   }
 
   def main(cmdArgs: Array[String]): Unit = {
-    JsonConfigAdapter(cmdArgs) match {
-      case Failure(error) => handleError("config", error)
-      case Success(config) =>
-        ConfigValidationService(config) match {
-          case errors: List[String] if (errors.nonEmpty) =>
-            errors.foreach(logger.error)
-          case _ =>
-            SparkFromEnvAdapter() match {
-              case Failure(error) => handleError("spark", error)
-              case Success(spark) => runEtl(config, spark)
+    LoaderConfigAdapter(sys.env, cmdArgs)(JsonConfigAdapter(_)) match {
+      case None =>
+        handleError("loaderConfig", new Exception("config not found"))
+      case Some(configPort) =>
+        configPort match {
+          case Failure(error) => handleError("config", error)
+          case Success(config) =>
+            ConfigValidationService(config) match {
+              case errors: List[String] if (errors.nonEmpty) =>
+                errors.foreach(logger.error)
+              case _ =>
+                SparkFromEnvAdapter() match {
+                  case Failure(error) => handleError("spark", error)
+                  case Success(spark) => runEtl(config, spark)
+                }
             }
         }
+
     }
   }
 }
